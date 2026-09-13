@@ -72,6 +72,13 @@ kinoRegisterBoons()
 	options[2] = "Double";
 	options[3] = "Triple";
 	kinoAddBoon( "ammo", "Ammo", options );
+	options = [];
+	options[0] = "Normal";
+	options[1] = "+10%%";
+	options[2] = "+20%%";
+	options[3] = "+50%%";
+	options[4] = "+100%%";
+	kinoAddBoon( "income", "Income", options );
 }
 
 kinoAddBoon( key, label, options )
@@ -286,6 +293,35 @@ kinoApplySelectedRules()
 	}
 }
 
+kinoIncomeScale()
+{
+	switch ( kinoBoonValue( "income" ) )
+	{
+		case 1: return 1.1;
+		case 2: return 1.2;
+		case 3: return 1.5;
+		case 4: return 2;
+	}
+	return 1;
+}
+
+kinoAddPlayerScore( points, add_to_total )
+{
+	if ( !IsDefined( points ) )
+		return;
+	points = int( points * level.kino_boon_income_scale + 0.5 );
+	disableDetourOnce( level.kino_income_func );
+	self [[level.kino_income_func]]( points, add_to_total );
+}
+
+kinoApplyIncomeBoon()
+{
+	if ( level.kino_boon_income_scale == 1 )
+		return;
+	level.kino_income_func = getFunction( "maps/_zombiemode_score", "add_to_player_score" );
+	replaceFunc( level.kino_income_func, ::kinoAddPlayerScore );
+}
+
 kinoLockRules()
 {
 	if ( level.kino_challenge_menu_locked )
@@ -301,6 +337,8 @@ kinoLockRules()
 	else if ( kinoBoonValue( "ammo" ) == 2 ) level.kino_boon_ammo_scale = 2;
 	else if ( kinoBoonValue( "ammo" ) == 3 ) level.kino_boon_ammo_scale = 3;
 	level.kino_boon_unlimited_sprint = kinoBoonValue( "sprint" ) == 1;
+	level.kino_boon_income_scale = kinoIncomeScale();
+	kinoApplyIncomeBoon();
 	players = get_players();
 	for ( i = 0; i < players.size; i++ )
 		kinoApplyPlayerBoons( players[i] );
@@ -447,14 +485,14 @@ kinoMakeMenu()
 		level.kino_challenge_menu_rows = level.kino_challenge_boons.size + 1;
 	for ( i = 0; i <= level.kino_challenge_menu_rows; i++ )
 	{
-		hud = CreateServerFontString( "objective", 3.0 );
-		hud.fontscale = 3.0;
+		hud = CreateServerFontString( "objective", 1.0 );
+		hud.fontscale = 1.0;
 		hud SetPoint( "TOPLEFT", "TOPLEFT", 14, 18 + i * 13 );
 		level.kino_challenge_hud[i] = hud;
 	}
 	level.kino_challenge_hud[0].color = ( 0.25, 0.85, 1 );
-	hud = CreateServerFontString( "objective", 3.0 );
-	hud.fontscale = 3.0;
+	hud = CreateServerFontString( "objective", 1.0 );
+	hud.fontscale = 1.0;
 	hud SetPoint( "TOPLEFT", "TOPLEFT", 14, 38 + level.kino_challenge_menu_rows * 17 );
 	hud SetText( "D-pad: move/change | A: select | B: back | Host only" );
 	level.kino_challenge_hud[level.kino_challenge_hud.size] = hud;
