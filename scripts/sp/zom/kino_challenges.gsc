@@ -14,7 +14,6 @@ init()
 	level.kino_challenge_boons = [];
 	level.kino_challenge_hud = [];
 	level.kino_challenge_random_count = 0;
-	level.kino_challenge_cooldown = 0;
 	level.kino_challenge_menu_locked = false;
 	kinoRegisterRules();
 	kinoRegisterPerks();
@@ -31,7 +30,6 @@ kinoRegisterRules()
 	kinoAddRule( "starting_room_only", "Starting Room Only" );
 	kinoAddRule( "wall_weapons_only", "Wall Weapons Only" );
 	kinoAddRule( "no_walkers", "No Walkers" );
-	kinoAddRule( "no_window_barricades", "No Window Barricades" );
 }
 
 kinoAddRule( key, label )
@@ -74,13 +72,6 @@ kinoRegisterBoons()
 	options[2] = "Double";
 	options[3] = "Triple";
 	kinoAddBoon( "ammo", "Ammo", options );
-	options = [];
-	options[0] = "Normal";
-	options[1] = "+10%%";
-	options[2] = "+20%%";
-	options[3] = "+50%%";
-	options[4] = "+100%%";
-	kinoAddBoon( "income", "Income", options );
 }
 
 kinoAddBoon( key, label, options )
@@ -158,11 +149,6 @@ kinoBoonCycle( boon, step )
 	boon.selected = kinoWrap( boon.selected + step, boon.options.size );
 }
 
-kinoBoonCount()
-{
-	return level.kino_challenge_boons.size;
-}
-
 kinoRandomPool()
 {
 	pool = [];
@@ -238,21 +224,6 @@ kinoActorDamage( weapon, damage, attacker )
 	return damage;
 }
 
-kinoAddPlayerScore( points, add_to_total )
-{
-	if ( !IsDefined( points ) )
-		return;
-	extra = int( points * ( level.kino_boon_income_scale - 1 ) );
-	disableDetourOnce( level.kino_income_func );
-	self [[level.kino_income_func]]( points, add_to_total );
-	if ( extra <= 0 )
-		return;
-	self.score += extra;
-	if ( !IsDefined( add_to_total ) || add_to_total )
-		self.score_total += extra;
-	self set_player_score_hud();
-}
-
 kinoDisableThunderGun()
 {
 	if ( IsDefined( level.zombie_weapons["thundergun_zm"] ) )
@@ -280,160 +251,39 @@ kinoApplyRule( key )
 			level.zombie_move_speed = 71;
 			level.zombie_vars["zombie_move_speed_multiplier"] = 71;
 			break;
-		case "no_window_barricades": kinoDisableBarricades(); break;
 	}
 }
 
-kinoDisableBarricades()
+kinoApplyPlayerBoons( player )
 {
-	// Gate the existing repair code before marking boards destroyed.
-	replaceFunc( getFunction( "maps/_zombiemode_utility", "no_valid_repairable_boards" ), ::kinoNoRepairableBoards );
-	// Kino's teleporter calls specific_powerup_drop with its own Carpenter entry.
-	level.kino_specific_drop = getFunction( "maps/_zombiemode_powerups", "specific_powerup_drop" );
-	replaceFunc( level.kino_specific_drop, ::kinoSpecificPowerupDrop );
-	// Remove Carpenter from the regular shuffled drop pool and the include table.
-	filtered = [];
-	for ( i = 0; i < level.zombie_powerup_array.size; i++ )
+	health_target = 100 + level.kino_boon_health_bonus;
+	player.maxhealth = health_target;
+	player.health = health_target;
+	player setMoveSpeedScale( level.kino_boon_movement_scale );
+	if ( level.kino_boon_unlimited_sprint )
 	{
-		if ( level.zombie_powerup_array[i] != "carpenter" )
-			filtered[filtered.size] = level.zombie_powerup_array[i];
+		player SetClientDvar( "player_sprintUnlimited", "1" );
+		player SetClientDvar( "player_sprintTime", "999999" );
 	}
-	level.zombie_powerup_array = filtered;
-	level.zombie_powerup_index = 0;
-	if ( IsDefined( level.zombie_include_powerups ) )
-		level.zombie_include_powerups["carpenter"] = undefined;
-
-	for ( i = 0; i < level.exterior_goals.size; i++ )
+	if ( level.kino_boon_ammo_scale > 1 )
 	{
-		node = level.exterior_goals[i];
-		if ( !IsDefined( node.barrier_chunks ) )
-			continue;
-		for ( j = 0; j < node.barrier_chunks.size; j++ )
+		weapons = player GetWeaponsList();
+		for ( j = 0; j < weapons.size; j++ )
 		{
-			chunk = node.barrier_chunks[j];
-			// _zombiemode_blockers::update_states simply assigns self.state.
-			chunk.state = "destroyed";
-			chunk.destroyed = true;
-			chunk Hide();
-			chunk notSolid();
-		}
-		if ( IsDefined( node.clip ) )
-		{
-			node.clip ConnectPaths();
-			node.clip disable_trigger();
+			bonus = int( WeaponStartAmmo( weapons[j] ) * ( level.kino_boon_ammo_scale - 1 ) );
+			if ( bonus > 0 )
+				player SetWeaponAmmoStock( weapons[j], player GetWeaponAmmoStock( weapons[j] ) + bonus );
 		}
 	}
 }
 
-kinoNoRepairableBoards( barrier_chunks )
+kinoApplySelectedRules()
 {
-	return true;
-}
-
-kinoSpecificPowerupDrop( powerup_name, drop_spot )
-{
-	if ( powerup_name == "carpenter" )
-		return;
-	// Same stock-call-through idiom used by Plutonium's zm_spawn_fix.gsc.
-	disableDetourOnce( level.kino_specific_drop );
-	self [[level.kino_specific_drop]]( powerup_name, drop_spot );
-}
-
-kinoCooldownLabel()
-{
-	switch ( level.kino_challenge_cooldown )
+	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 	{
-		case 1: return "Short";
-		case 2: return "None";
+		if ( level.kino_challenge_rules[i].enabled )
+			kinoApplyRule( level.kino_challenge_rules[i].key );
 	}
-	return "Normal";
-}
-
-kinoApplyCooldown()
-{
-	if ( level.kino_challenge_cooldown == 0 )
-		return;
-	level.kino_cooldown_scale = 0.5;
-	if ( level.kino_challenge_cooldown == 2 )
-		level.kino_cooldown_scale = 0;
-	level.kino_chalk_one_up = getFunction( "maps/_zombiemode", "chalk_one_up" );
-	replaceFunc( level.kino_chalk_one_up, ::kinoChalkOneUp );
-	replaceFunc( getFunction( "maps/_zombiemode", "chalk_round_over" ), ::kinoChalkRoundOver );
-}
-
-kinoChalkRoundOver()
-{
-	// Stock chalk_round_over spends 1 second per pulse (rounded up),
-	// followed by 2 seconds. Scale that actual blocking duration.
-	time = level.zombie_vars["zombie_between_round_time"];
-	if ( time > 3 )
-		time -= 2;
-	pulses = 0;
-	for ( q = 0; q < time * 0.5; q++ )
-		pulses++;
-	delay = ( pulses + 2 ) * level.kino_cooldown_scale;
-	if ( level.round_number <= 5 || level.round_number > 10 )
-		level.chalk_hud2 SetText( " " );
-	if ( delay > 0 )
-		wait( delay );
-	level.chalk_hud1.alpha = 0;
-	level.chalk_hud2.alpha = 0;
-}
-
-kinoChalkOneUp()
-{
-	// Preserve the entire round-1 intro, including intro_hud_done.
-	if ( level.first_round )
-	{
-		disableDetourOnce( level.kino_chalk_one_up );
-		self [[level.kino_chalk_one_up]]();
-		return;
-	}
-	// Stock non-intro path blocks for 0.5 + 2 seconds before spawning.
-	delay = 2.5 * level.kino_cooldown_scale;
-	if ( delay > 0 )
-		wait( delay );
-	hud1 = level.chalk_hud1;
-	hud2 = level.chalk_hud2;
-	if ( level.round_number <= 5 )
-	{
-		hud1 SetShader( "hud_chalk_" + level.round_number, 64, 64 );
-		hud2 SetText( " " );
-	}
-	else if ( level.round_number <= 10 )
-	{
-		hud1 SetShader( "hud_chalk_5", 64, 64 );
-		hud2 SetShader( "hud_chalk_" + ( level.round_number - 5 ), 64, 64 );
-	}
-	else
-	{
-		hud1.fontscale = 32;
-		hud1 SetValue( level.round_number );
-		hud2 SetText( " " );
-	}
-	if ( IsDefined( level.chalk_override ) )
-	{
-		hud1 SetText( level.chalk_override );
-		hud2 SetText( " " );
-		level.chalk_override = undefined;
-	}
-	hud1.alpha = 1;
-	hud2.alpha = 1;
-	hud1.color = ( 0.21, 0, 0 );
-	hud2.color = ( 0.21, 0, 0 );
-	if ( !IsDefined( level.doground_nomusic ) )
-		level.doground_nomusic = 0;
-	if ( level.round_number == 5 || level.round_number == 10 || level.round_number == 20 ||
-		level.round_number == 35 || level.round_number == 50 )
-	{
-		players = getplayers();
-		if ( players.size > 0 )
-		{
-			vo = getFunction( "maps/_zombiemode_audio", "create_and_play_dialog" );
-			players[RandomInt( players.size )] thread [[vo]]( "general", "round_" + level.round_number );
-		}
-	}
-	ReportMTU( level.round_number );
 }
 
 kinoLockRules()
@@ -453,23 +303,7 @@ kinoLockRules()
 	level.kino_boon_unlimited_sprint = kinoBoonValue( "sprint" ) == 1;
 	players = get_players();
 	for ( i = 0; i < players.size; i++ )
-	{
-		health_target = 100 + level.kino_boon_health_bonus;
-		players[i] SetMaxHealth( health_target );
-		players[i].health = health_target;
-		players[i] setMoveSpeedScale( level.kino_boon_movement_scale );
-		if ( level.kino_boon_unlimited_sprint )
-		{
-			players[i] SetClientDvar( "player_sprintUnlimited", "1" );
-			players[i] SetClientDvar( "player_sprintTime", "999999" );
-		}
-		weapons = players[i] GetWeaponsList();
-		for ( j = 0; j < weapons.size; j++ )
-		{
-			bonus = int( WeaponStartAmmo( weapons[j] ) * ( level.kino_boon_ammo_scale - 1 ) );
-			if ( bonus > 0 ) players[i] GiveAmmo( bonus, weapons[j] );
-		}
-	}
+		kinoApplyPlayerBoons( players[i] );
 	if ( kinoBoonValue( "damage" ) > 0 )
 	{
 		zombies = GetAiSpeciesArray( "axis", "all" );
@@ -479,12 +313,7 @@ kinoLockRules()
 			zombies[i].actor_damage_func = ::kinoActorDamage;
 		}
 	}
-	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
-	{
-		if ( level.kino_challenge_rules[i].enabled )
-			kinoApplyRule( level.kino_challenge_rules[i].key );
-	}
-	kinoApplyCooldown();
+	kinoApplySelectedRules();
 	for ( i = 0; i < level.kino_challenge_hud.size; i++ )
 		level.kino_challenge_hud[i] destroyElem();
 	kinoShowLockedRules();
@@ -527,11 +356,6 @@ kinoShowLockedRules()
 			kinoActiveLine( "- No " + level.kino_challenge_perks[i].label, row );
 			row++;
 		}
-	}
-	if ( level.kino_challenge_cooldown != 0 )
-	{
-		kinoActiveLine( "- Round Cooldown: " + kinoCooldownLabel(), row );
-		row++;
 	}
 	if ( row == 1 )
 		kinoActiveLine( "- No restrictions", row );
@@ -581,7 +405,6 @@ kinoMenuRows( menu )
 			state = "ON";
 		rows[rows.size] = level.kino_challenge_rules[i].label + ": " + state;
 	}
-	rows[rows.size] = "Round Cooldown: " + kinoCooldownLabel();
 	rows[rows.size] = "Random N Rules: " + level.kino_challenge_random_count;
 	rows[rows.size] = "START GAME (locks settings)";
 	if ( menu.confirming )
@@ -617,7 +440,7 @@ kinoRefreshMenu( menu )
 kinoMakeMenu()
 {
 	level.kino_challenge_hud = [];
-	level.kino_challenge_menu_rows = level.kino_challenge_rules.size + 4;
+	level.kino_challenge_menu_rows = level.kino_challenge_rules.size + 3;
 	if ( level.kino_challenge_menu_rows < level.kino_challenge_perks.size + 3 )
 		level.kino_challenge_menu_rows = level.kino_challenge_perks.size + 3;
 	if ( level.kino_challenge_menu_rows < level.kino_challenge_boons.size + 1 )
@@ -738,8 +561,6 @@ kinoHandleInput( menu, input )
 	if ( input == "kino_decrease" )
 		step = -1;
 	if ( menu.selected == level.kino_challenge_rules.size + 1 )
-		level.kino_challenge_cooldown = kinoWrap( level.kino_challenge_cooldown + step, 3 );
-	else if ( menu.selected == level.kino_challenge_rules.size + 2 )
 	{
 		pool = kinoRandomPool();
 		level.kino_challenge_random_count = kinoWrap( level.kino_challenge_random_count + step, pool.size + 1 );
