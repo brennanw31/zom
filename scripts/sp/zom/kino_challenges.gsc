@@ -233,6 +233,42 @@ kinoActorDamage( weapon, damage, attacker )
 	return damage;
 }
 
+kinoApplyDamageToZombie()
+{
+	if ( IsDefined( self.kino_original_actor_damage_func ) )
+		return;
+	self.kino_original_actor_damage_func = self.actor_damage_func;
+	self.actor_damage_func = ::kinoActorDamage;
+}
+
+kinoApplyDamageBoon()
+{
+	if ( !IsDefined( level._zombie_custom_spawn_logic ) )
+		level._zombie_custom_spawn_logic = [];
+	else if ( !IsArray( level._zombie_custom_spawn_logic ) )
+	{
+		original_spawn_logic = level._zombie_custom_spawn_logic;
+		level._zombie_custom_spawn_logic = [];
+		level._zombie_custom_spawn_logic[0] = original_spawn_logic;
+	}
+	level._zombie_custom_spawn_logic[level._zombie_custom_spawn_logic.size] = ::kinoApplyDamageToZombie;
+	zombies = GetAiSpeciesArray( "axis", "all" );
+	for ( i = 0; i < zombies.size; i++ )
+		zombies[i] kinoApplyDamageToZombie();
+}
+
+kinoDamageScale()
+{
+	switch ( kinoBoonValue( "damage" ) )
+	{
+		case 1: return 1.1;
+		case 2: return 1.2;
+		case 3: return 1.5;
+		case 4: return 2;
+	}
+	return 1;
+}
+
 kinoDisableThunderGun()
 {
 	if ( IsDefined( level.zombie_weapons["thundergun_zm"] ) )
@@ -313,26 +349,56 @@ kinoSpecificPowerupDrop( powerup_name, drop_spot )
 	self [[level.kino_specific_drop]]( powerup_name, drop_spot );
 }
 
+kinoAmmoScale()
+{
+	switch ( kinoBoonValue( "ammo" ) )
+	{
+		case 1: return 1.5;
+		case 2: return 2;
+		case 3: return 3;
+	}
+	return 1;
+}
+
+kinoAmmoMonitor()
+{
+	self endon( "disconnect" );
+	level endon( "end_game" );
+	self.kino_ammo_reserve = [];
+	for ( ;; )
+	{
+		weapons = self GetWeaponsList();
+		for ( i = 0; i < weapons.size; i++ )
+		{
+			weapon = weapons[i];
+			stock = self GetWeaponAmmoStock( weapon );
+			if ( !IsDefined( self.kino_ammo_reserve[weapon] ) )
+			{
+				self.kino_ammo_reserve[weapon] = int( WeaponStartAmmo( weapon ) * ( level.kino_boon_ammo_scale - 1 ) );
+			}
+			if ( stock < WeaponStartAmmo( weapon ) && self.kino_ammo_reserve[weapon] > 0 )
+			{
+				refill = WeaponStartAmmo( weapon ) - stock;
+				if ( refill > self.kino_ammo_reserve[weapon] )
+					refill = self.kino_ammo_reserve[weapon];
+				self SetWeaponAmmoStock( weapon, stock + refill );
+				self.kino_ammo_reserve[weapon] -= refill;
+			}
+		}
+		wait( 0.05 );
+	}
+}
+
 kinoApplyPlayerBoons( player )
 {
 	health_target = 100 + level.kino_boon_health_bonus;
-	player.maxhealth = health_target;
+	player SetMaxHealth( health_target );
 	player.health = health_target;
 	player setMoveSpeedScale( level.kino_boon_movement_scale );
 	if ( level.kino_boon_unlimited_sprint )
 	{
 		player SetClientDvar( "player_sprintUnlimited", "1" );
 		player SetClientDvar( "player_sprintTime", "999999" );
-	}
-	if ( level.kino_boon_ammo_scale > 1 )
-	{
-		weapons = player GetWeaponsList();
-		for ( j = 0; j < weapons.size; j++ )
-		{
-			bonus = int( WeaponStartAmmo( weapons[j] ) * ( level.kino_boon_ammo_scale - 1 ) );
-			if ( bonus > 0 )
-				player SetWeaponAmmoStock( weapons[j], player GetWeaponAmmoStock( weapons[j] ) + bonus );
-		}
 	}
 }
 
@@ -473,26 +539,21 @@ kinoLockRules()
 	level.kino_challenge_menu_locked = true;
 	kinoApplyPerks();
 	level.kino_boon_health_bonus = kinoBoonValue( "health" ) * 50;
+	level.kino_boon_damage_scale = kinoDamageScale();
 	level.kino_boon_movement_scale = 1 + kinoBoonValue( "movement" ) * 0.05;
-	level.kino_boon_ammo_scale = 1;
-	if ( kinoBoonValue( "ammo" ) == 1 ) level.kino_boon_ammo_scale = 1.5;
-	else if ( kinoBoonValue( "ammo" ) == 2 ) level.kino_boon_ammo_scale = 2;
-	else if ( kinoBoonValue( "ammo" ) == 3 ) level.kino_boon_ammo_scale = 3;
+	level.kino_boon_ammo_scale = kinoAmmoScale();
 	level.kino_boon_unlimited_sprint = kinoBoonValue( "sprint" ) == 1;
 	level.kino_boon_income_scale = kinoIncomeScale();
 	kinoApplyIncomeBoon();
 	players = get_players();
 	for ( i = 0; i < players.size; i++ )
-		kinoApplyPlayerBoons( players[i] );
-	if ( kinoBoonValue( "damage" ) > 0 )
 	{
-		zombies = GetAiSpeciesArray( "axis", "all" );
-		for ( i = 0; i < zombies.size; i++ )
-		{
-			zombies[i].kino_original_actor_damage_func = zombies[i].actor_damage_func;
-			zombies[i].actor_damage_func = ::kinoActorDamage;
-		}
+		kinoApplyPlayerBoons( players[i] );
+		if ( level.kino_boon_ammo_scale > 1 )
+			players[i] thread kinoAmmoMonitor();
 	}
+	if ( kinoBoonValue( "damage" ) > 0 )
+		kinoApplyDamageBoon();
 	kinoApplySelectedRules();
 	kinoApplyCooldown();
 	for ( i = 0; i < level.kino_challenge_hud.size; i++ )
