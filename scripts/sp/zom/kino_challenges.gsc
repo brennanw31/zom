@@ -32,6 +32,7 @@ kinoRegisterRules()
 	kinoAddRule( "wall_weapons_only", "Wall Weapons Only" );
 	kinoAddRule( "no_walkers", "No Walkers" );
 	kinoAddRule( "no_window_barricades", "No Window Barricades" );
+	kinoAddRule( "spawn_rate", "Spawn Rate" );
 }
 
 kinoAddRule( key, label )
@@ -271,6 +272,11 @@ kinoDisableThunderGun()
 		level.zombie_include_weapons["thundergun_zm"] = false;
 }
 
+kinoApplySpawnRateCurse()
+{
+	level.zombie_vars["zombie_spawn_delay"] = 0.04;
+}
+
 kinoApplyRule( key )
 {
 	switch ( key )
@@ -291,6 +297,7 @@ kinoApplyRule( key )
 			level.zombie_vars["zombie_move_speed_multiplier"] = 71;
 			break;
 		case "no_window_barricades": kinoDisableBarricades(); break;
+		case "spawn_rate": kinoApplySpawnRateCurse(); break;
 	}
 }
 
@@ -426,7 +433,6 @@ kinoCooldownLabel()
 	switch ( level.kino_challenge_cooldown )
 	{
 		case 1: return "Short";
-		case 2: return "None";
 	}
 	return "Normal";
 }
@@ -435,9 +441,7 @@ kinoApplyCooldown()
 {
 	if ( level.kino_challenge_cooldown == 0 )
 		return;
-	level.kino_cooldown_scale = 0.5;
-	if ( level.kino_challenge_cooldown == 2 )
-		level.kino_cooldown_scale = 0;
+	level.kino_cooldown_scale = 0.2;
 	level.kino_chalk_one_up = getFunction( "maps/_zombiemode", "chalk_one_up" );
 	replaceFunc( level.kino_chalk_one_up, ::kinoChalkOneUp );
 	replaceFunc( getFunction( "maps/_zombiemode", "chalk_round_over" ), ::kinoChalkRoundOver );
@@ -572,7 +576,10 @@ kinoShowLockedRules()
 	{
 		if ( level.kino_challenge_rules[i].enabled )
 		{
-			kinoActiveLine( "- " + level.kino_challenge_rules[i].label, row );
+			label = level.kino_challenge_rules[i].label;
+			if ( level.kino_challenge_rules[i].key == "spawn_rate" )
+				label += ": Fast";
+			kinoActiveLine( "- " + label, row );
 			row++;
 			has_selection = true;
 		}
@@ -636,7 +643,13 @@ kinoMenuRows( menu )
 	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 	{
 		state = "OFF";
-		if ( level.kino_challenge_rules[i].enabled )
+		if ( level.kino_challenge_rules[i].key == "spawn_rate" )
+		{
+			state = "Normal";
+			if ( level.kino_challenge_rules[i].enabled )
+				state = "Fast";
+		}
+		else if ( level.kino_challenge_rules[i].enabled )
 			state = "ON";
 		rows[rows.size] = level.kino_challenge_rules[i].label + ": " + state;
 	}
@@ -797,7 +810,7 @@ kinoHandleInput( menu, input )
 	if ( input == "kino_decrease" )
 		step = -1;
 	if ( menu.selected == level.kino_challenge_rules.size + 1 )
-		level.kino_challenge_cooldown = kinoWrap( level.kino_challenge_cooldown + step, 3 );
+		level.kino_challenge_cooldown = kinoWrap( level.kino_challenge_cooldown + step, 2 );
 	else if ( menu.selected == level.kino_challenge_rules.size + 2 )
 	{
 		pool = kinoRandomPool();
