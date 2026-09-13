@@ -402,6 +402,33 @@ kinoApplyPlayerBoons( player )
 	}
 }
 
+kinoApplyHealthBoon()
+{
+	health_target = 100 + level.kino_boon_health_bonus;
+	if ( self HasPerk( "specialty_armorvest" ) )
+		health_target = level.zombie_vars["zombie_perk_juggernaut_health"] + level.kino_boon_health_bonus;
+	else if ( self HasPerk( "specialty_armorvest_upgrade" ) )
+		health_target = level.zombie_vars["zombie_perk_juggernaut_health_upgrade"] + level.kino_boon_health_bonus;
+	self SetMaxHealth( health_target );
+	self.health = health_target;
+}
+
+kinoGivePerk( perk, bought )
+{
+	disableDetourOnce( level.kino_give_perk_func );
+	self [[level.kino_give_perk_func]]( perk, bought );
+	if ( perk == "specialty_armorvest" || perk == "specialty_armorvest_upgrade" )
+		self kinoApplyHealthBoon();
+}
+
+kinoApplyHealthBoonHook()
+{
+	if ( level.kino_boon_health_bonus <= 0 )
+		return;
+	level.kino_give_perk_func = getFunction( "maps/_zombiemode_perks", "give_perk" );
+	replaceFunc( level.kino_give_perk_func, ::kinoGivePerk );
+}
+
 kinoApplySelectedRules()
 {
 	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
@@ -545,6 +572,7 @@ kinoLockRules()
 	level.kino_boon_unlimited_sprint = kinoBoonValue( "sprint" ) == 1;
 	level.kino_boon_income_scale = kinoIncomeScale();
 	kinoApplyIncomeBoon();
+	kinoApplyHealthBoonHook();
 	players = get_players();
 	for ( i = 0; i < players.size; i++ )
 	{
