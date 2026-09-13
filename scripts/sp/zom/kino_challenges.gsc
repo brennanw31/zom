@@ -31,6 +31,7 @@ kinoRegisterRules()
 	kinoAddRule( "starting_room_only", "Starting Room Only" );
 	kinoAddRule( "wall_weapons_only", "Wall Weapons Only" );
 	kinoAddRule( "no_walkers", "No Walkers" );
+	kinoAddRule( "no_window_barricades", "No Window Barricades" );
 }
 
 kinoAddRule( key, label )
@@ -259,7 +260,57 @@ kinoApplyRule( key )
 			level.zombie_move_speed = 71;
 			level.zombie_vars["zombie_move_speed_multiplier"] = 71;
 			break;
+		case "no_window_barricades": kinoDisableBarricades(); break;
 	}
+}
+
+kinoDisableBarricades()
+{
+	replaceFunc( getFunction( "maps/_zombiemode_utility", "no_valid_repairable_boards" ), ::kinoNoRepairableBoards );
+	level.kino_specific_drop = getFunction( "maps/_zombiemode_powerups", "specific_powerup_drop" );
+	replaceFunc( level.kino_specific_drop, ::kinoSpecificPowerupDrop );
+	filtered = [];
+	for ( i = 0; i < level.zombie_powerup_array.size; i++ )
+	{
+		if ( level.zombie_powerup_array[i] != "carpenter" )
+			filtered[filtered.size] = level.zombie_powerup_array[i];
+	}
+	level.zombie_powerup_array = filtered;
+	level.zombie_powerup_index = 0;
+	if ( IsDefined( level.zombie_include_powerups ) )
+		level.zombie_include_powerups["carpenter"] = undefined;
+	for ( i = 0; i < level.exterior_goals.size; i++ )
+	{
+		node = level.exterior_goals[i];
+		if ( !IsDefined( node.barrier_chunks ) )
+			continue;
+		for ( j = 0; j < node.barrier_chunks.size; j++ )
+		{
+			chunk = node.barrier_chunks[j];
+			chunk.state = "destroyed";
+			chunk.destroyed = true;
+			chunk Hide();
+			chunk notSolid();
+		}
+		if ( IsDefined( node.clip ) )
+		{
+			node.clip ConnectPaths();
+			node.clip disable_trigger();
+		}
+	}
+}
+
+kinoNoRepairableBoards( barrier_chunks )
+{
+	return true;
+}
+
+kinoSpecificPowerupDrop( powerup_name, drop_spot )
+{
+	if ( powerup_name == "carpenter" )
+		return;
+	disableDetourOnce( level.kino_specific_drop );
+	self [[level.kino_specific_drop]]( powerup_name, drop_spot );
 }
 
 kinoApplyPlayerBoons( player )
