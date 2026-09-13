@@ -70,12 +70,6 @@ kinoRegisterBoons()
 	kinoAddBoon( "movement", "Movement Speed", options );
 	options = [];
 	options[0] = "Normal";
-	options[1] = "+50%%";
-	options[2] = "Double";
-	options[3] = "Triple";
-	kinoAddBoon( "ammo", "Ammo", options );
-	options = [];
-	options[0] = "Normal";
 	options[1] = "+10%%";
 	options[2] = "+20%%";
 	options[3] = "+50%%";
@@ -349,46 +343,6 @@ kinoSpecificPowerupDrop( powerup_name, drop_spot )
 	self [[level.kino_specific_drop]]( powerup_name, drop_spot );
 }
 
-kinoAmmoScale()
-{
-	switch ( kinoBoonValue( "ammo" ) )
-	{
-		case 1: return 1.5;
-		case 2: return 2;
-		case 3: return 3;
-	}
-	return 1;
-}
-
-kinoAmmoMonitor()
-{
-	self endon( "disconnect" );
-	level endon( "end_game" );
-	self.kino_ammo_reserve = [];
-	for ( ;; )
-	{
-		weapons = self GetWeaponsList();
-		for ( i = 0; i < weapons.size; i++ )
-		{
-			weapon = weapons[i];
-			stock = self GetWeaponAmmoStock( weapon );
-			if ( !IsDefined( self.kino_ammo_reserve[weapon] ) )
-			{
-				self.kino_ammo_reserve[weapon] = int( WeaponStartAmmo( weapon ) * ( level.kino_boon_ammo_scale - 1 ) );
-			}
-			if ( stock < WeaponStartAmmo( weapon ) && self.kino_ammo_reserve[weapon] > 0 )
-			{
-				refill = WeaponStartAmmo( weapon ) - stock;
-				if ( refill > self.kino_ammo_reserve[weapon] )
-					refill = self.kino_ammo_reserve[weapon];
-				self SetWeaponAmmoStock( weapon, stock + refill );
-				self.kino_ammo_reserve[weapon] -= refill;
-			}
-		}
-		wait( 0.05 );
-	}
-}
-
 kinoApplyPlayerBoons( player )
 {
 	health_target = 100 + level.kino_boon_health_bonus;
@@ -568,18 +522,13 @@ kinoLockRules()
 	level.kino_boon_health_bonus = kinoBoonValue( "health" ) * 50;
 	level.kino_boon_damage_scale = kinoDamageScale();
 	level.kino_boon_movement_scale = 1 + kinoBoonValue( "movement" ) * 0.05;
-	level.kino_boon_ammo_scale = kinoAmmoScale();
 	level.kino_boon_unlimited_sprint = kinoBoonValue( "sprint" ) == 1;
 	level.kino_boon_income_scale = kinoIncomeScale();
 	kinoApplyIncomeBoon();
 	kinoApplyHealthBoonHook();
 	players = get_players();
 	for ( i = 0; i < players.size; i++ )
-	{
 		kinoApplyPlayerBoons( players[i] );
-		if ( level.kino_boon_ammo_scale > 1 )
-			players[i] thread kinoAmmoMonitor();
-	}
 	if ( kinoBoonValue( "damage" ) > 0 )
 		kinoApplyDamageBoon();
 	kinoApplySelectedRules();
@@ -600,23 +549,32 @@ kinoActiveLine( label, row )
 
 kinoShowLockedRules()
 {
-	hud = kinoActiveLine( "KINO RULES", 0 );
+	hud = kinoActiveLine( "GAME RULES", 0 );
 	hud.color = ( 0.25, 0.85, 1 );
 	row = 1;
+	hud = kinoActiveLine( "BOONS", row );
+	hud.color = ( 0.25, 0.85, 0.25 );
+	row++;
+	has_selection = false;
 	for ( i = 0; i < level.kino_challenge_boons.size; i++ )
 	{
 		if ( level.kino_challenge_boons[i].selected != 0 )
 		{
 			kinoActiveLine( "+ " + level.kino_challenge_boons[i].label + ": " + kinoBoonLabel( level.kino_challenge_boons[i] ), row );
 			row++;
+			has_selection = true;
 		}
 	}
+	hud = kinoActiveLine( "CURSES", row );
+	hud.color = ( 0.85, 0.25, 0.25 );
+	row++;
 	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 	{
 		if ( level.kino_challenge_rules[i].enabled )
 		{
 			kinoActiveLine( "- " + level.kino_challenge_rules[i].label, row );
 			row++;
+			has_selection = true;
 		}
 	}
 	for ( i = 0; i < level.kino_challenge_perks.size; i++ )
@@ -625,14 +583,16 @@ kinoShowLockedRules()
 		{
 			kinoActiveLine( "- No " + level.kino_challenge_perks[i].label, row );
 			row++;
+			has_selection = true;
 		}
 	}
 	if ( level.kino_challenge_cooldown != 0 )
 	{
 		kinoActiveLine( "- Round Cooldown: " + kinoCooldownLabel(), row );
 		row++;
+		has_selection = true;
 	}
-	if ( row == 1 )
+	if ( !has_selection )
 		kinoActiveLine( "- No restrictions", row );
 }
 
