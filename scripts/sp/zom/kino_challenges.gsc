@@ -14,6 +14,7 @@ init()
 	level.kino_challenge_boons = [];
 	level.kino_challenge_hud = [];
 	level.kino_challenge_random_count = 0;
+	level.kino_challenge_cooldown = 0;
 	level.kino_challenge_menu_locked = false;
 	kinoRegisterRules();
 	kinoRegisterPerks();
@@ -322,6 +323,96 @@ kinoApplyIncomeBoon()
 	replaceFunc( level.kino_income_func, ::kinoAddPlayerScore );
 }
 
+kinoCooldownLabel()
+{
+	switch ( level.kino_challenge_cooldown )
+	{
+		case 1: return "Short";
+		case 2: return "None";
+	}
+	return "Normal";
+}
+
+kinoApplyCooldown()
+{
+	if ( level.kino_challenge_cooldown == 0 )
+		return;
+	level.kino_cooldown_scale = 0.5;
+	if ( level.kino_challenge_cooldown == 2 )
+		level.kino_cooldown_scale = 0;
+	level.kino_chalk_one_up = getFunction( "maps/_zombiemode", "chalk_one_up" );
+	replaceFunc( level.kino_chalk_one_up, ::kinoChalkOneUp );
+	replaceFunc( getFunction( "maps/_zombiemode", "chalk_round_over" ), ::kinoChalkRoundOver );
+}
+
+kinoChalkRoundOver()
+{
+	time = level.zombie_vars["zombie_between_round_time"];
+	if ( time > 3 )
+		time -= 2;
+	pulses = 0;
+	for ( q = 0; q < time * 0.5; q++ )
+		pulses++;
+	delay = ( pulses + 2 ) * level.kino_cooldown_scale;
+	if ( level.round_number <= 5 || level.round_number > 10 )
+		level.chalk_hud2 SetText( " " );
+	if ( delay > 0 )
+		wait( delay );
+	level.chalk_hud1.alpha = 0;
+	level.chalk_hud2.alpha = 0;
+}
+
+kinoChalkOneUp()
+{
+	if ( level.first_round )
+	{
+		disableDetourOnce( level.kino_chalk_one_up );
+		self [[level.kino_chalk_one_up]]();
+		return;
+	}
+	delay = 2.5 * level.kino_cooldown_scale;
+	if ( delay > 0 )
+		wait( delay );
+	hud1 = level.chalk_hud1;
+	hud2 = level.chalk_hud2;
+	if ( level.round_number <= 5 )
+	{
+		hud1 SetShader( "hud_chalk_" + level.round_number, 64, 64 );
+		hud2 SetText( " " );
+	}
+	else if ( level.round_number <= 10 )
+	{
+		hud1 SetShader( "hud_chalk_5", 64, 64 );
+		hud2 SetShader( "hud_chalk_" + ( level.round_number - 5 ), 64, 64 );
+	}
+	else
+	{
+		hud1.fontscale = 32;
+		hud1 SetValue( level.round_number );
+		hud2 SetText( " " );
+	}
+	if ( IsDefined( level.chalk_override ) )
+	{
+		hud1 SetText( level.chalk_override );
+		hud2 SetText( " " );
+		level.chalk_override = undefined;
+	}
+	hud1.alpha = 1;
+	hud2.alpha = 1;
+	hud1.color = ( 0.21, 0, 0 );
+	hud2.color = ( 0.21, 0, 0 );
+	if ( !IsDefined( level.doground_nomusic ) )
+		level.doground_nomusic = 0;
+	if ( level.round_number == 5 || level.round_number == 10 || level.round_number == 20 ||
+		level.round_number == 35 || level.round_number == 50 )
+	{
+		players = get_players();
+		if ( players.size > 0 )
+			players[RandomInt( players.size )] thread maps\_zombiemode_audio::create_and_play_dialog( "general", "round_" + level.round_number );
+	}
+	ReportMTU( level.round_number );
+}
+
 kinoLockRules()
 {
 	if ( level.kino_challenge_menu_locked )
@@ -352,6 +443,7 @@ kinoLockRules()
 		}
 	}
 	kinoApplySelectedRules();
+	kinoApplyCooldown();
 	for ( i = 0; i < level.kino_challenge_hud.size; i++ )
 		level.kino_challenge_hud[i] destroyElem();
 	kinoShowLockedRules();
@@ -394,6 +486,11 @@ kinoShowLockedRules()
 			kinoActiveLine( "- No " + level.kino_challenge_perks[i].label, row );
 			row++;
 		}
+	}
+	if ( level.kino_challenge_cooldown != 0 )
+	{
+		kinoActiveLine( "- Round Cooldown: " + kinoCooldownLabel(), row );
+		row++;
 	}
 	if ( row == 1 )
 		kinoActiveLine( "- No restrictions", row );
@@ -443,6 +540,7 @@ kinoMenuRows( menu )
 			state = "ON";
 		rows[rows.size] = level.kino_challenge_rules[i].label + ": " + state;
 	}
+	rows[rows.size] = "Round Cooldown: " + kinoCooldownLabel();
 	rows[rows.size] = "Random N Rules: " + level.kino_challenge_random_count;
 	rows[rows.size] = "START GAME (locks settings)";
 	if ( menu.confirming )
@@ -478,7 +576,7 @@ kinoRefreshMenu( menu )
 kinoMakeMenu()
 {
 	level.kino_challenge_hud = [];
-	level.kino_challenge_menu_rows = level.kino_challenge_rules.size + 3;
+	level.kino_challenge_menu_rows = level.kino_challenge_rules.size + 4;
 	if ( level.kino_challenge_menu_rows < level.kino_challenge_perks.size + 3 )
 		level.kino_challenge_menu_rows = level.kino_challenge_perks.size + 3;
 	if ( level.kino_challenge_menu_rows < level.kino_challenge_boons.size + 1 )
@@ -599,6 +697,8 @@ kinoHandleInput( menu, input )
 	if ( input == "kino_decrease" )
 		step = -1;
 	if ( menu.selected == level.kino_challenge_rules.size + 1 )
+		level.kino_challenge_cooldown = kinoWrap( level.kino_challenge_cooldown + step, 3 );
+	else if ( menu.selected == level.kino_challenge_rules.size + 2 )
 	{
 		pool = kinoRandomPool();
 		level.kino_challenge_random_count = kinoWrap( level.kino_challenge_random_count + step, pool.size + 1 );
