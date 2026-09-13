@@ -113,6 +113,10 @@ kinoRegisterPlaytest()
 	options[0] = "No";
 	options[1] = "Yes";
 	kinoAddPlaytestOption( "points", "Give Points", options );
+	options = [];
+	options[0] = "No";
+	options[1] = "Yes";
+	kinoAddPlaytestOption( "infinite_ammo", "Infinite Ammo", options );
 }
 
 kinoAddPlaytestOption( key, label, options )
@@ -380,6 +384,21 @@ kinoGivePlaytestPoints( player )
 	player maps\_zombiemode_score::add_to_player_score( 100000 );
 }
 
+kinoInfiniteAmmo()
+{
+	self endon( "disconnect" );
+	for ( ;; )
+	{
+		wait( 0.1 );
+		weapon = self GetCurrentWeapon();
+		if ( weapon != "none" )
+			self GiveMaxAmmo( weapon );
+		offhand = self GetCurrentOffhand();
+		if ( offhand != "none" )
+			self GiveMaxAmmo( offhand );
+	}
+}
+
 kinoApplyPlaytest( player )
 {
 	if ( kinoPlaytestValue( "god_mode" ) == 1 )
@@ -389,6 +408,8 @@ kinoApplyPlaytest( player )
 		player GiveWeapon( weapon );
 	if ( kinoPlaytestValue( "points" ) == 1 )
 		kinoGivePlaytestPoints( player );
+	if ( kinoPlaytestValue( "infinite_ammo" ) == 1 )
+		player thread kinoInfiniteAmmo();
 }
 
 kinoApplyHordeSizeCurse()
@@ -715,7 +736,7 @@ kinoShowLockedRules()
 			if ( level.kino_challenge_rules[i].key == "spawn_rate" )
 				label += ": Fast";
 			else if ( level.kino_challenge_rules[i].key == "horde_size" )
-				label += ": High";
+				label += ": Large";
 			kinoActiveLine( "- " + label, row );
 			row++;
 			has_selection = true;
@@ -801,7 +822,7 @@ kinoMenuRows( menu )
 		{
 			state = "Normal";
 			if ( level.kino_challenge_rules[i].enabled )
-				state = "High";
+				state = "Large";
 		}
 		else if ( level.kino_challenge_rules[i].enabled )
 			state = "ON";
