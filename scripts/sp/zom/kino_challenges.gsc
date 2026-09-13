@@ -12,6 +12,7 @@ init()
 	level.kino_challenge_rules = [];
 	level.kino_challenge_perks = [];
 	level.kino_challenge_boons = [];
+	level.kino_challenge_playtest = [];
 	level.kino_challenge_hud = [];
 	level.kino_challenge_random_count = 0;
 	level.kino_challenge_cooldown = 0;
@@ -19,6 +20,7 @@ init()
 	kinoRegisterRules();
 	kinoRegisterPerks();
 	kinoRegisterBoons();
+	kinoRegisterPlaytest();
 	level.round_prestart_func = ::kinoChallengePrestart;
 }
 
@@ -33,6 +35,7 @@ kinoRegisterRules()
 	kinoAddRule( "no_walkers", "No Walkers" );
 	kinoAddRule( "no_window_barricades", "No Window Barricades" );
 	kinoAddRule( "spawn_rate", "Spawn Rate" );
+	kinoAddRule( "horde_size", "Horde Size" );
 }
 
 kinoAddRule( key, label )
@@ -86,6 +89,40 @@ kinoAddBoon( key, label, options )
 	boon.options = options;
 	boon.selected = 0;
 	level.kino_challenge_boons[level.kino_challenge_boons.size] = boon;
+}
+
+kinoRegisterPlaytest()
+{
+	options = [];
+	options[0] = "Off";
+	options[1] = "On";
+	kinoAddPlaytestOption( "god_mode", "God Mode", options );
+	options = [];
+	options[0] = "1";
+	options[1] = "10";
+	options[2] = "20";
+	options[3] = "50";
+	kinoAddPlaytestOption( "starting_round", "Starting Round", options );
+	options = [];
+	options[0] = "None";
+	options[1] = "HK21";
+	options[2] = "Raygun";
+	options[3] = "Thundergun";
+	kinoAddPlaytestOption( "weapon", "Give Weapon", options );
+	options = [];
+	options[0] = "No";
+	options[1] = "Yes";
+	kinoAddPlaytestOption( "points", "Give Points", options );
+}
+
+kinoAddPlaytestOption( key, label, options )
+{
+	option = SpawnStruct();
+	option.key = key;
+	option.label = label;
+	option.options = options;
+	option.selected = 0;
+	level.kino_challenge_playtest[level.kino_challenge_playtest.size] = option;
 }
 
 kinoRegisterPerks()
@@ -219,6 +256,16 @@ kinoBoonValue( key )
 	return 0;
 }
 
+kinoPlaytestValue( key )
+{
+	for ( i = 0; i < level.kino_challenge_playtest.size; i++ )
+	{
+		if ( level.kino_challenge_playtest[i].key == key )
+			return level.kino_challenge_playtest[i].selected;
+	}
+	return 0;
+}
+
 kinoActorDamage( weapon, damage, attacker )
 {
 	if ( IsDefined( self.kino_original_actor_damage_func ) )
@@ -277,6 +324,79 @@ kinoApplySpawnRateCurse()
 	level.zombie_vars["zombie_spawn_delay"] = 0.04;
 }
 
+kinoPlaytestStartingRound()
+{
+	switch ( kinoPlaytestValue( "starting_round" ) )
+	{
+		case 1: return 10;
+		case 2: return 20;
+		case 3: return 50;
+	}
+	return 1;
+}
+
+kinoApplyPlaytestStartingRound()
+{
+	starting_round = kinoPlaytestStartingRound();
+	if ( starting_round == 1 )
+		return;
+	level.first_round = false;
+	level.round_number = starting_round;
+	level.zombie_move_speed = starting_round * level.zombie_vars["zombie_move_speed_multiplier"];
+	spawn_delay = level.zombie_vars["zombie_spawn_delay"];
+	round_delay_scale = 0.95;
+	minimum_spawn_delay = 0.08;
+	for ( i = 1; i < starting_round; i++ )
+	{
+		spawn_delay *= round_delay_scale;
+		if ( spawn_delay < minimum_spawn_delay )
+		{
+			spawn_delay = minimum_spawn_delay;
+			break;
+		}
+	}
+	level.zombie_vars["zombie_spawn_delay"] = spawn_delay;
+}
+
+kinoPlaytestWeapon()
+{
+	switch ( kinoPlaytestValue( "weapon" ) )
+	{
+		case 1: return "hk21_upgraded_zm";
+		case 2: return "ray_gun_upgraded_zm";
+		case 3: return "thundergun_upgraded_zm";
+	}
+	return undefined;
+}
+
+kinoGivePlaytestPoints( player )
+{
+	if ( level.kino_boon_income_scale != 1 )
+	{
+		disableDetourOnce( level.kino_income_func );
+		player [[level.kino_income_func]]( 100000 );
+		return;
+	}
+	player maps\_zombiemode_score::add_to_player_score( 100000 );
+}
+
+kinoApplyPlaytest( player )
+{
+	if ( kinoPlaytestValue( "god_mode" ) == 1 )
+		player EnableInvulnerability();
+	weapon = kinoPlaytestWeapon();
+	if ( IsDefined( weapon ) )
+		player GiveWeapon( weapon );
+	if ( kinoPlaytestValue( "points" ) == 1 )
+		kinoGivePlaytestPoints( player );
+}
+
+kinoApplyHordeSizeCurse()
+{
+	level.zombie_ai_limit = 30;
+	SetAILimit( level.zombie_ai_limit );
+}
+
 kinoApplyRule( key )
 {
 	switch ( key )
@@ -298,6 +418,7 @@ kinoApplyRule( key )
 			break;
 		case "no_window_barricades": kinoDisableBarricades(); break;
 		case "spawn_rate": kinoApplySpawnRateCurse(); break;
+		case "horde_size": kinoApplyHordeSizeCurse(); break;
 	}
 }
 
@@ -531,8 +652,12 @@ kinoLockRules()
 	kinoApplyIncomeBoon();
 	kinoApplyHealthBoonHook();
 	players = get_players();
+	kinoApplyPlaytestStartingRound();
 	for ( i = 0; i < players.size; i++ )
+	{
 		kinoApplyPlayerBoons( players[i] );
+		kinoApplyPlaytest( players[i] );
+	}
 	if ( kinoBoonValue( "damage" ) > 0 )
 		kinoApplyDamageBoon();
 	kinoApplySelectedRules();
@@ -569,6 +694,16 @@ kinoShowLockedRules()
 			has_selection = true;
 		}
 	}
+	for ( i = 0; i < level.kino_challenge_playtest.size; i++ )
+	{
+		if ( level.kino_challenge_playtest[i].selected != 0 )
+		{
+			kinoActiveLine( "+ Playtest " + level.kino_challenge_playtest[i].label + ": " +
+				level.kino_challenge_playtest[i].options[level.kino_challenge_playtest[i].selected], row );
+			row++;
+			has_selection = true;
+		}
+	}
 	hud = kinoActiveLine( "CURSES", row );
 	hud.color = ( 0.85, 0.25, 0.25 );
 	row++;
@@ -579,6 +714,8 @@ kinoShowLockedRules()
 			label = level.kino_challenge_rules[i].label;
 			if ( level.kino_challenge_rules[i].key == "spawn_rate" )
 				label += ": Fast";
+			else if ( level.kino_challenge_rules[i].key == "horde_size" )
+				label += ": High";
 			kinoActiveLine( "- " + label, row );
 			row++;
 			has_selection = true;
@@ -619,6 +756,17 @@ kinoMenuRows( menu )
 			boon = level.kino_challenge_boons[i];
 			rows[rows.size] = boon.label + ": " + kinoBoonLabel( boon );
 		}
+		rows[rows.size] = "Playtest >";
+		rows[rows.size] = "Back";
+		return rows;
+	}
+	if ( menu.page == "playtest" )
+	{
+		for ( i = 0; i < level.kino_challenge_playtest.size; i++ )
+		{
+			option = level.kino_challenge_playtest[i];
+			rows[rows.size] = option.label + ": " + option.options[option.selected];
+		}
 		rows[rows.size] = "Back";
 		return rows;
 	}
@@ -649,6 +797,12 @@ kinoMenuRows( menu )
 			if ( level.kino_challenge_rules[i].enabled )
 				state = "Fast";
 		}
+		else if ( level.kino_challenge_rules[i].key == "horde_size" )
+		{
+			state = "Normal";
+			if ( level.kino_challenge_rules[i].enabled )
+				state = "High";
+		}
 		else if ( level.kino_challenge_rules[i].enabled )
 			state = "ON";
 		rows[rows.size] = level.kino_challenge_rules[i].label + ": " + state;
@@ -668,6 +822,8 @@ kinoRefreshMenu( menu )
 		title = "CHALLENGE TYPE";
 	else if ( menu.page == "boons" )
 		title = "BOONS";
+	else if ( menu.page == "playtest" )
+		title = "PLAYTEST";
 	else if ( menu.page == "perks" )
 		title = "PERK RESTRICTIONS";
 	level.kino_challenge_hud[0] SetText( title );
@@ -692,8 +848,10 @@ kinoMakeMenu()
 	level.kino_challenge_menu_rows = level.kino_challenge_rules.size + 4;
 	if ( level.kino_challenge_menu_rows < level.kino_challenge_perks.size + 3 )
 		level.kino_challenge_menu_rows = level.kino_challenge_perks.size + 3;
-	if ( level.kino_challenge_menu_rows < level.kino_challenge_boons.size + 1 )
-		level.kino_challenge_menu_rows = level.kino_challenge_boons.size + 1;
+	if ( level.kino_challenge_menu_rows < level.kino_challenge_boons.size + 2 )
+		level.kino_challenge_menu_rows = level.kino_challenge_boons.size + 2;
+	if ( level.kino_challenge_menu_rows < level.kino_challenge_playtest.size + 1 )
+		level.kino_challenge_menu_rows = level.kino_challenge_playtest.size + 1;
 	for ( i = 0; i <= level.kino_challenge_menu_rows; i++ )
 	{
 		hud = CreateServerFontString( "objective", 1.0 );
@@ -726,7 +884,7 @@ kinoHandleInput( menu, input )
 	{
 		if ( menu.page == "categories" )
 			return;
-		if ( menu.page == "boons" || menu.page == "main" )
+		if ( menu.page == "boons" || menu.page == "playtest" || menu.page == "main" )
 			menu.page = "categories";
 		else
 			menu.page = "main";
@@ -763,13 +921,38 @@ kinoHandleInput( menu, input )
 			menu.page = "categories";
 			menu.selected = 0;
 		}
-		else if ( menu.selected < rows.size - 1 )
+		else if ( menu.selected == level.kino_challenge_boons.size )
+		{
+			if ( input == "kino_select" || input == "kino_increase" )
+			{
+				menu.page = "playtest";
+				menu.selected = 0;
+			}
+		}
+		else if ( menu.selected < level.kino_challenge_boons.size )
 		{
 			boon = level.kino_challenge_boons[menu.selected];
 			step = 1;
 			if ( input == "kino_decrease" )
 				step = -1;
 			kinoBoonCycle( boon, step );
+		}
+		return;
+	}
+	if ( menu.page == "playtest" )
+	{
+		if ( menu.selected == rows.size - 1 && input == "kino_select" )
+		{
+			menu.page = "boons";
+			menu.selected = 0;
+		}
+		else if ( menu.selected < rows.size - 1 )
+		{
+			option = level.kino_challenge_playtest[menu.selected];
+			step = 1;
+			if ( input == "kino_decrease" )
+				step = -1;
+			kinoBoonCycle( option, step );
 		}
 		return;
 	}
