@@ -6,7 +6,7 @@ Host-side GSC mod for Black Ops / Plutonium T5 Zombies. It runs only on Kino der
 
 ## Optional compile diagnostic
 
-With the match closed, temporarily copy `diagnostics/kino_challenges.gsc` over the installed `kino_challenges.gsc` at the path below. Keep that exact filename so the diagnostic uses the same script path. The full source remains in `scripts/sp/zom/kino_challenges.gsc` in this project; do not install both versions together.
+With the match closed, temporarily copy `diagnostics/kino.gsc` over the installed `kino.gsc` at the path below. Keep that exact filename so the diagnostic uses the same script path. The full source remains in `scripts/sp/zom/kino.gsc` in this project; do not install both versions together.
 
 Start a fresh Kino match. The diagnostic should print `[KINO PROBE] init entered` in the console, then `direct local call passed` and `local callback passed` in the console and on screen after spawning. It uses the supplied working script's connection/spawn sequence without modifying rounds or killing zombies.
 
@@ -29,9 +29,9 @@ If it fails, capture the first error and the preceding script-loading lines. If 
 ## Install
 
 1. Close a running Zombies match.
-2. Copy [kino_challenges.gsc](scripts/sp/zom/kino_challenges.gsc) to:
+2. Copy [kino.gsc](scripts/sp/zom/kino.gsc) to:
 
-   `%LOCALAPPDATA%\Plutonium\storage\t5\scripts\sp\zom\kino_challenges.gsc`
+   `%LOCALAPPDATA%\Plutonium\storage\t5\scripts\sp\zom\kino.gsc`
 
 3. Start or restart a private/dedicated Kino der Toten game. The host/server needs the file; clients do not need to install it. The rules HUD is a server HUD and is shown to all connected players.
 4. In the pre-round menu, the host uses:
