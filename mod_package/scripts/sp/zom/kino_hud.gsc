@@ -232,8 +232,6 @@ kinoMenuRows( menu )
 kinoRefreshMenu( menu )
 {
 	footer = level.kino_challenge_hud[level.kino_challenge_hud.size - 1];
-	rows = [];
-	footer SetPoint( "TOPLEFT", "TOPLEFT", 14, 38 + rows.size * 17 );
 	title = "KINO CHALLENGES";
 	if ( menu.page == "categories" )
 		title = "CHALLENGE TYPE";
@@ -245,6 +243,7 @@ kinoRefreshMenu( menu )
 		title = "PERK RESTRICTIONS";
 	level.kino_challenge_hud[0] SetText( title );
 	rows = kinoMenuRows( menu );
+	footer SetPoint( "TOPLEFT", "TOPLEFT", 14, 38 + rows.size * 17 );
 	for ( i = 0; i < level.kino_challenge_menu_rows; i++ )
 	{
 		text = " ";
