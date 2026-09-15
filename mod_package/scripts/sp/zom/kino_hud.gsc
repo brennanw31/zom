@@ -37,7 +37,7 @@ kinoShowLockedRules()
 	for( i = 0; i < level.kino_challenge_perks.size; i++ )
 		if( level.kino_challenge_perks[i].enabled )
 			curse_options_selected = true;
-	if( level.kino_challenge_cooldown != 0 )
+	if( scripts\sp\zom\kino_config::kinoEscalationValue() != 0 )
 		curse_options_selected = true;
 
 	// Display nothing if no selections are made
@@ -94,16 +94,18 @@ kinoShowLockedRules()
 		hud = kinoActiveLine( "CURSES", row );
 		hud.color = ( 0.85, 0.25, 0.25 ); // Red
 		row++;
+		if ( scripts\sp\zom\kino_config::kinoEscalationValue() != 0 )
+		{
+			kinoActiveLine( "- " + level.kino_challenge_escalation.label + ": " +
+				level.kino_challenge_escalation.options[level.kino_challenge_escalation.selected], row );
+			row++;
+		}
 		for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 		{
 			if ( level.kino_challenge_rules[i].enabled &&
 				!scripts\sp\zom\kino_config::kinoRuleIsSuppressed( level.kino_challenge_rules[i].key ) )
 			{
 				label = level.kino_challenge_rules[i].label;
-				if ( level.kino_challenge_rules[i].key == "spawn_rate" )
-					label += ": Fast";
-				else if ( level.kino_challenge_rules[i].key == "horde_size" )
-					label += ": Large";
 				kinoActiveLine( "- " + label, row );
 				row++;
 			}
@@ -116,11 +118,6 @@ kinoShowLockedRules()
 				kinoActiveLine( "- No " + level.kino_challenge_perks[i].label, row );
 				row++;
 			}
-		}
-		if ( level.kino_challenge_cooldown != 0 )
-		{
-			kinoActiveLine( "- Round Cooldown: " + scripts\sp\zom\kino_gameplay::kinoCooldownLabel(), row );
-			row++;
 		}
 	}
 }
@@ -193,29 +190,17 @@ kinoMenuEntries( menu )
 		entries[entries.size] = kinoMenuEntry( "perks", "Perks > (" +
 			scripts\sp\zom\kino_config::kinoPerkCount() + " restricted)", -1 );
 	}
+	entries[entries.size] = kinoMenuEntry( "escalation", level.kino_challenge_escalation.label + ": " +
+		level.kino_challenge_escalation.options[level.kino_challenge_escalation.selected], -1 );
 	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 	{
 		if ( scripts\sp\zom\kino_config::kinoRuleIsSuppressed( level.kino_challenge_rules[i].key ) )
 			continue;
 		state = "OFF";
-		if ( level.kino_challenge_rules[i].key == "spawn_rate" )
-		{
-			state = "Normal";
-			if ( level.kino_challenge_rules[i].enabled )
-				state = "Fast";
-		}
-		else if ( level.kino_challenge_rules[i].key == "horde_size" )
-		{
-			state = "Normal";
-			if ( level.kino_challenge_rules[i].enabled )
-				state = "Large";
-		}
-		else if ( level.kino_challenge_rules[i].enabled )
+		if ( level.kino_challenge_rules[i].enabled )
 			state = "ON";
 		entries[entries.size] = kinoMenuEntry( "rule", level.kino_challenge_rules[i].label + ": " + state, i );
 	}
-	entries[entries.size] = kinoMenuEntry( "cooldown", "Round Cooldown: " +
-		scripts\sp\zom\kino_gameplay::kinoCooldownLabel(), -1 );
 	entries[entries.size] = kinoMenuEntry( "random", "Random N Rules: " + level.kino_challenge_random_count, -1 );
 	return entries;
 }

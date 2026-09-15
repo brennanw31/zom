@@ -32,7 +32,6 @@ kinoLockRules()
 	if ( scripts\sp\zom\kino_config::kinoBoonValue( "damage" ) > 0 )
 		scripts\sp\zom\kino_gameplay::kinoApplyDamageBoon();
 	scripts\sp\zom\kino_gameplay::kinoApplySelectedRules();
-	scripts\sp\zom\kino_gameplay::kinoApplyCooldown();
 	for ( i = 0; i < level.kino_challenge_hud.size; i++ )
 		level.kino_challenge_hud[i] destroyElem();
 	scripts\sp\zom\kino_hud::kinoShowLockedRules();
@@ -161,6 +160,14 @@ kinoHandleInput( menu, input )
 		}
 		return;
 	}
+	if ( entry.kind == "escalation" )
+	{
+		step = 1;
+		if ( input == "kino_decrease" )
+			step = -1;
+		scripts\sp\zom\kino_config::kinoBoonCycle( level.kino_challenge_escalation, step );
+		return;
+	}
 	if ( entry.kind == "rule" )
 	{
 		scripts\sp\zom\kino_config::kinoToggle( level.kino_challenge_rules[entry.index], input );
@@ -175,9 +182,7 @@ kinoHandleInput( menu, input )
 	step = 1;
 	if ( input == "kino_decrease" )
 		step = -1;
-	if ( entry.kind == "cooldown" )
-		level.kino_challenge_cooldown = scripts\sp\zom\kino_config::kinoWrap( level.kino_challenge_cooldown + step, 2 );
-	else if ( entry.kind == "random" )
+	if ( entry.kind == "random" )
 	{
 		pool = scripts\sp\zom\kino_config::kinoRandomPool();
 		level.kino_challenge_random_count = scripts\sp\zom\kino_config::kinoWrap( level.kino_challenge_random_count + step, pool.size + 1 );

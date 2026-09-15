@@ -12,12 +12,27 @@ kinoChallengesInitialize()
 	level.kino_challenge_playtest = [];
 	level.kino_challenge_hud = [];
 	level.kino_challenge_random_count = 0;
-	level.kino_challenge_cooldown = 0;
 	level.kino_challenge_menu_locked = false;
+	kinoRegisterEscalation();
 	kinoRegisterRules();
 	kinoRegisterPerks();
 	kinoRegisterBoons();
 	kinoRegisterPlaytest();
+}
+
+kinoRegisterEscalation()
+{
+	options = [];
+	options[0] = "Normal";
+	options[1] = "Quick Ramp";
+	options[2] = "Frenzy";
+	options[3] = "Hell";
+	escalation = SpawnStruct();
+	escalation.label = "Escalation";
+	escalation.options = options;
+	escalation.selected = 0;
+	escalation.is_escalation = true;
+	level.kino_challenge_escalation = escalation;
 }
 
 kinoRegisterRules()
@@ -27,10 +42,6 @@ kinoRegisterRules()
 	kinoAddRule( "no_mystery_box", "No Mystery Box" );
 	kinoAddRule( "no_thunder_gun", "No Thunder Gun" );
 	kinoAddRule( "starting_room_only", "Starting Room Only" );
-	kinoAddRule( "no_walkers", "No Walkers" );
-	kinoAddRule( "no_window_barricades", "No Window Barricades" );
-	kinoAddRule( "spawn_rate", "Spawn Rate" );
-	kinoAddRule( "horde_size", "Horde Size" );
 	kinoAddRuleSuppression( "no_mystery_box", "no_thunder_gun" );
 	kinoAddRuleSuppression( "no_power", "no_pack_a_punch" );
 	kinoAddRuleSuppression( "starting_room_only", "no_power" );
@@ -253,6 +264,11 @@ kinoBoonLabel( boon )
 	return boon.options[boon.selected];
 }
 
+kinoEscalationValue()
+{
+	return level.kino_challenge_escalation.selected;
+}
+
 kinoBoonCycle( boon, step )
 {
 	boon.selected = kinoWrap( boon.selected + step, boon.options.size );
@@ -281,6 +297,7 @@ kinoPlaytestValue( key )
 kinoRandomPool()
 {
 	pool = [];
+	pool[pool.size] = level.kino_challenge_escalation;
 	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 		pool[pool.size] = level.kino_challenge_rules[i];
 	for ( i = 0; i < level.kino_challenge_perks.size; i++ )
@@ -295,6 +312,7 @@ kinoChooseRandomRules()
 {
 	pool = kinoRandomPool();
 	kinoSetAllPerks( false );
+	level.kino_challenge_escalation.selected = 0;
 	for ( i = 0; i < level.kino_challenge_rules.size; i++ )
 		level.kino_challenge_rules[i].enabled = false;
 	count = level.kino_challenge_random_count;
@@ -306,7 +324,10 @@ kinoChooseRandomRules()
 		temp = pool[i];
 		pool[i] = pool[pick];
 		pool[pick] = temp;
-		pool[i].enabled = true;
+		if ( pool[i].is_escalation )
+			pool[i].selected = RandomIntRange( 1, pool[i].options.size );
+		else
+			pool[i].enabled = true;
 	}
 }
 

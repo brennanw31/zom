@@ -82,11 +82,6 @@ kinoDisableThunderGun()
 		level.zombie_include_weapons["thundergun_zm"] = false;
 }
 
-kinoApplySpawnRateCurse()
-{
-	level.zombie_vars["zombie_spawn_delay"] = 0.04;
-}
-
 kinoPlaytestStartingRound()
 {
 	switch ( scripts\sp\zom\kino_config::kinoPlaytestValue( "starting_round" ) )
@@ -171,9 +166,9 @@ kinoApplyPlaytest( player )
 		player thread kinoInfiniteAmmo();
 }
 
-kinoApplyHordeSizeCurse()
+kinoSetHordeSize( size )
 {
-	level.zombie_ai_limit = 30;
+	level.zombie_ai_limit = size;
 	SetAILimit( level.zombie_ai_limit );
 }
 
@@ -189,15 +184,6 @@ kinoApplyRule( key )
 			kinoDisableTarget( "zombie_door" );
 			kinoDisableTarget( "zombie_debris" );
 			break;
-		case "no_walkers":
-			// set_run_speed() selects sprint when RandomIntRange(base, base+35) > 70.
-			// Set the initial base AND the multiplier used at every round end.
-			level.zombie_move_speed = 71;
-			level.zombie_vars["zombie_move_speed_multiplier"] = 71;
-			break;
-		case "no_window_barricades": kinoDisableBarricades(); break;
-		case "spawn_rate": kinoApplySpawnRateCurse(); break;
-		case "horde_size": kinoApplyHordeSizeCurse(); break;
 	}
 }
 
@@ -297,6 +283,77 @@ kinoApplySelectedRules()
 		if ( level.kino_challenge_rules[i].enabled )
 			kinoApplyRule( level.kino_challenge_rules[i].key );
 	}
+	if ( scripts\sp\zom\kino_config::kinoEscalationValue() != 0 )
+		kinoApplyEscalation();
+}
+
+kinoApplyEscalation()
+{
+	tier = scripts\sp\zom\kino_config::kinoEscalationValue();
+	base_speed_increment = level.zombie_vars["zombie_move_speed_multiplier"];
+	level.kino_escalation_speed_base = 0;
+	level.kino_escalation_speed_increment = base_speed_increment;
+	level.kino_escalation_stock_spawn_scale = 0.95;
+	if ( tier == 1 )
+	{
+		level.zombie_move_speed = 8;
+		level.kino_escalation_speed_base = 8;
+		level.kino_escalation_speed_increment = base_speed_increment * 1.25;
+		level.kino_escalation_spawn_delay = 2;
+		level.kino_escalation_spawn_scale = 0.9;
+		level.kino_escalation_spawn_minimum = 0.08;
+		kinoSetHordeSize( 26 );
+		level.kino_cooldown_scale = 0.8;
+	}
+	else if ( tier == 2 )
+	{
+		level.zombie_move_speed = 16;
+		level.kino_escalation_speed_base = 16;
+		level.kino_escalation_speed_increment = base_speed_increment * 1.5;
+		level.kino_escalation_spawn_delay = 1.75;
+		level.kino_escalation_spawn_scale = 0.85;
+		level.kino_escalation_spawn_minimum = 0.06;
+		kinoDisableBarricades();
+		kinoSetHordeSize( 28 );
+		level.kino_cooldown_scale = 0.5;
+	}
+	else
+	{
+		level.zombie_move_speed = 71;
+		level.kino_escalation_speed_increment = 71;
+		level.kino_escalation_spawn_delay = 1.5;
+		level.kino_escalation_spawn_scale = 0.8;
+		level.kino_escalation_spawn_minimum = 0.04;
+		kinoDisableBarricades();
+		kinoSetHordeSize( 30 );
+		level.kino_cooldown_scale = 0.2;
+	}
+	level.zombie_vars["zombie_spawn_delay"] = level.kino_escalation_spawn_delay;
+	level.zombie_vars["zombie_move_speed_multiplier"] = level.kino_escalation_speed_increment;
+	kinoApplyCooldown();
+	if ( level.kino_escalation_speed_base > 0 )
+		level thread kinoMaintainEscalationSpeed();
+}
+
+kinoApplyEscalationRoundRamp()
+{
+	next_delay = level.kino_escalation_spawn_delay * level.kino_escalation_spawn_scale;
+	if ( next_delay < level.kino_escalation_spawn_minimum )
+		next_delay = level.kino_escalation_spawn_minimum;
+	level.kino_escalation_spawn_delay = next_delay;
+	level.zombie_vars["zombie_spawn_delay"] = next_delay / level.kino_escalation_stock_spawn_scale;
+	level.zombie_vars["zombie_move_speed_multiplier"] = level.kino_escalation_speed_increment;
+}
+
+kinoMaintainEscalationSpeed()
+{
+	level endon( "end_game" );
+	for ( ;; )
+	{
+		level waittill( "between_round_over" );
+		level.zombie_move_speed = level.kino_escalation_speed_base +
+			( level.round_number - 1 ) * level.kino_escalation_speed_increment;
+	}
 }
 
 kinoIncomeScale()
@@ -328,20 +385,8 @@ kinoApplyIncomeBoon()
 	replaceFunc( level.kino_income_func, ::kinoAddPlayerScore );
 }
 
-kinoCooldownLabel()
-{
-	switch ( level.kino_challenge_cooldown )
-	{
-		case 1: return "Short";
-	}
-	return "Normal";
-}
-
 kinoApplyCooldown()
 {
-	if ( level.kino_challenge_cooldown == 0 )
-		return;
-	level.kino_cooldown_scale = 0.2;
 	level.kino_chalk_one_up = getFunction( "maps/_zombiemode", "chalk_one_up" );
 	replaceFunc( level.kino_chalk_one_up, ::kinoChalkOneUp );
 	replaceFunc( getFunction( "maps/_zombiemode", "chalk_round_over" ), ::kinoChalkRoundOver );
@@ -362,6 +407,7 @@ kinoChalkRoundOver()
 		wait( delay );
 	level.chalk_hud1.alpha = 0;
 	level.chalk_hud2.alpha = 0;
+	kinoApplyEscalationRoundRamp();
 }
 
 kinoChalkOneUp()
