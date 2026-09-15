@@ -141,6 +141,9 @@ kinoMenuEntries( menu )
 	{
 		entries[0] = kinoMenuEntry( "category_boons", "Boons >", -1 );
 		entries[1] = kinoMenuEntry( "category_curses", "Curses >", -1 );
+		entries[2] = kinoMenuEntry( "start", "START GAME (locks settings)", -1 );
+		if ( menu.confirming )
+			entries[2].label = "START GAME? A confirm / B back";
 		return entries;
 	}
 	if ( menu.page == "boons" )
@@ -214,9 +217,6 @@ kinoMenuEntries( menu )
 	entries[entries.size] = kinoMenuEntry( "cooldown", "Round Cooldown: " +
 		scripts\sp\zom\kino_gameplay::kinoCooldownLabel(), -1 );
 	entries[entries.size] = kinoMenuEntry( "random", "Random N Rules: " + level.kino_challenge_random_count, -1 );
-	entries[entries.size] = kinoMenuEntry( "start", "START GAME (locks settings)", -1 );
-	if ( menu.confirming )
-		entries[entries.size - 1].label = "START GAME? A confirm / B back";
 	return entries;
 }
 

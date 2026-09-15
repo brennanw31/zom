@@ -80,9 +80,14 @@ kinoHandleInput( menu, input )
 		{
 			if ( entry.kind == "category_boons" )
 				menu.page = "boons";
-			else
+			else if ( entry.kind == "category_curses" )
 				menu.page = "main";
-			menu.selected = 0;
+			else if ( entry.kind == "start" && input == "kino_select" )
+				menu.confirming = true;
+			else
+				return;
+			if ( !menu.confirming )
+				menu.selected = 0;
 		}
 		return;
 	}
