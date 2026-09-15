@@ -12,3 +12,7 @@ For changes to `scripts/**/*.gsc` or `diagnostics/**/*.gsc`:
 6. Do not copy external documentation wholesale or present an unverified API as established fact.
 
 Keep GSC changes small and preserve the host-only, Kino-only behavior unless a task explicitly changes it.
+
+## Installer Safety
+
+Do not execute the generated `install.bat` installer, whether from the workspace or `BO1_Mod_Installer.zip`. Running `package.py` to build the archive is permitted.
